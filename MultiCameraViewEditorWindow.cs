@@ -3,8 +3,11 @@ using System.Linq;
 using System.Reflection;
 using UnityEditor;
 using UnityEngine;
+
+#if UNITY_2019_1_OR_NEWER
 using UnityEngine.Experimental.Rendering;
 using UnityEngine.SceneManagement;
+#endif
 
 namespace UniLib
 {
@@ -21,10 +24,13 @@ namespace UniLib
 		private Camera[] _previewCameras;
 		private RenderTexture _previewTexture;
 		private SceneView _sceneView;
+#if UNITY_2019_1_OR_NEWER
 		private PropertyInfo _customSceneProp;
+#endif
 		private Material _guiTextureBlit2SRGBMaterial;
-		private Type _playModeViewType;
+		private Type _viewType;
 		private float _positionSize;
+		private Vector2 _scrollPosition;
 		
 		private const float PreviewSize = 0.4f;
 
@@ -32,20 +38,26 @@ namespace UniLib
 		{
 			SetSceneView();
 			
+#if UNITY_2019_1_OR_NEWER
 			_customSceneProp = typeof(SceneView).GetProperty("customScene",
 				BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance);
+#endif
 			
 			_guiTextureBlit2SRGBMaterial = typeof(EditorGUIUtility)
 				.GetProperty("GUITextureBlit2SRGBMaterial", BindingFlags.Static | BindingFlags.NonPublic)
-				?.GetValue(typeof(EditorGUIUtility), null) as Material;
+				.GetValue(typeof(EditorGUIUtility), null) as Material;
 			
 			_previewCameras = new Camera[0];
-
-			_playModeViewType = AppDomain.CurrentDomain.GetAssemblies()
-				.SelectMany(a => a.GetTypes())
-				.Where(t => t.Name == "PlayModeView")
-				.Select(t => t).First();
 			
+#if UNITY_2019_3_OR_NEWER
+			var typeName = "PlayModeView";
+#else
+			var typeName = "GameView";
+#endif
+			_viewType = AppDomain.CurrentDomain.GetAssemblies()
+				.SelectMany(a => a.GetTypes())
+				.Where(t => t.Name == typeName)
+				.Select(t => t).First();
 		}
 
 		private void SetSceneView()
@@ -82,23 +94,27 @@ namespace UniLib
 
 			_positionSize = 0;
 			var cameras = Camera.allCameras;
-			EditorGUILayout.BeginHorizontal();
-			for (var i = 0; i < cameras.Length; i++)
+			using (var scroll = new EditorGUILayout.ScrollViewScope(_scrollPosition))
 			{
-				if (_previewCameras.Length <= i)
+				_scrollPosition = scroll.scrollPosition;
+				EditorGUILayout.BeginHorizontal();
+				for (var i = 0; i < cameras.Length; i++)
 				{
-					var pvc = EditorUtility.CreateGameObjectWithHideFlags(
-						"Preview Camera",
-						HideFlags.HideAndDontSave,
-						typeof(Camera),
-						typeof(Skybox)).GetComponent<Camera>();
-					pvc.enabled = false;
-					ArrayUtility.Add(ref _previewCameras, pvc); 
+					if (_previewCameras.Length <= i)
+					{
+						var pvc = EditorUtility.CreateGameObjectWithHideFlags(
+							"Preview Camera",
+							HideFlags.HideAndDontSave,
+							typeof(Camera),
+							typeof(Skybox)).GetComponent<Camera>();
+						pvc.enabled = false;
+						ArrayUtility.Add(ref _previewCameras, pvc); 
+					}
+					
+					DrawPreviewCamera(Camera.allCameras[i], _previewCameras[i]);
 				}
-				
-				DrawPreviewCamera(Camera.allCameras[i], _previewCameras[i]);
+				EditorGUILayout.EndHorizontal();
 			}
-			EditorGUILayout.EndHorizontal();
 		}
 
 		private void DrawPreviewCamera(Camera camera, Camera previewCamera)
@@ -106,7 +122,9 @@ namespace UniLib
 			previewCamera.CopyFrom(camera);
 			previewCamera.cameraType = CameraType.Preview;
 
-			previewCamera.scene = (Scene) _customSceneProp.GetValue(_sceneView);
+#if UNITY_2019_1_OR_NEWER
+			previewCamera.scene = (Scene) _customSceneProp.GetValue(_sceneView, new object[0]);
+#endif
 
 			var dstSkybox = previewCamera.GetComponent<Skybox>();
 			if (dstSkybox)
@@ -147,7 +165,7 @@ namespace UniLib
 			}
 			else
 			{
-				_positionSize -= size.x;
+				_positionSize -= size.x + 20;
 			}
 			using (new EditorGUILayout.VerticalScope("box", GUILayout.Width(size.x)))
 			{
@@ -169,8 +187,13 @@ namespace UniLib
 		private RenderTexture GetPreviewTextureWithSize(int width, int height)
 		{
 			if (_previewTexture == null || _previewTexture.width != width || _previewTexture.height != height)
+#if UNITY_2019_1_OR_NEWER
 				_previewTexture = new RenderTexture(width, height, 24, SystemInfo.GetGraphicsFormat(DefaultFormat.LDR));
+#else
+				_previewTexture = new RenderTexture(width, height, 24, RenderTextureFormat.Default, RenderTextureReadWrite.Linear);
+#endif
 
+			
 			return _previewTexture;
 		}
 
@@ -178,10 +201,17 @@ namespace UniLib
 		{
 			var previewSize = camera.targetTexture != null
 				? new Vector2(camera.targetTexture.width, camera.targetTexture.height)
-				: (Vector2) _playModeViewType.InvokeMember(
+#if UNITY_2019_3_OR_NEWER
+				: (Vector2) _viewType.InvokeMember(
 					"GetMainPlayModeViewTargetSize",
 					BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.InvokeMethod, null, null,
 					new object[0]);
+#else
+				: (Vector2) _viewType.InvokeMember(
+					"GetMainGameViewTargetSize",
+					BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.InvokeMethod, null, null,
+					new object[0]);
+#endif
 			
 			if (previewSize.x < 0f)
 			{
