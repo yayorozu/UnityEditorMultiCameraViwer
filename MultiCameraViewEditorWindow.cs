@@ -77,7 +77,7 @@ namespace UniLib
 			}
 			foreach (var texture in _previewTextures)
 			{
-				Destroy(texture);
+				DestroyImmediate(texture);
 			}
 		}
 		
@@ -197,7 +197,7 @@ namespace UniLib
 			}
 			else if (_previewTextures[index].width != width || _previewTextures[index].height != height)
 			{
-				Destroy(_previewTextures[index]);
+				DestroyImmediate(_previewTextures[index]);
 				_previewTextures[index] = CreateRenderTexture(width, height);
 			}
 
