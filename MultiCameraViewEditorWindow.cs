@@ -22,7 +22,7 @@ namespace UniLib
 		}
 
 		private Camera[] _previewCameras;
-		private RenderTexture _previewTexture;
+		private RenderTexture[] _previewTextures;
 		private SceneView _sceneView;
 #if UNITY_2019_1_OR_NEWER
 		private PropertyInfo _customSceneProp;
@@ -48,6 +48,7 @@ namespace UniLib
 				.GetValue(typeof(EditorGUIUtility), null) as Material;
 			
 			_previewCameras = new Camera[0];
+			_previewTextures = new RenderTexture[0];
 			
 #if UNITY_2019_3_OR_NEWER
 			var typeName = "PlayModeView";
@@ -73,6 +74,10 @@ namespace UniLib
 			foreach (var camera in _previewCameras)
 			{
 				DestroyImmediate(camera.gameObject, true);
+			}
+			foreach (var texture in _previewTextures)
+			{
+				Destroy(texture);
 			}
 		}
 		
@@ -111,13 +116,13 @@ namespace UniLib
 						ArrayUtility.Add(ref _previewCameras, pvc); 
 					}
 					
-					DrawPreviewCamera(Camera.allCameras[i], _previewCameras[i]);
+					DrawPreviewCamera(i, Camera.allCameras[i], _previewCameras[i]);
 				}
 				EditorGUILayout.EndHorizontal();
 			}
 		}
 
-		private void DrawPreviewCamera(Camera camera, Camera previewCamera)
+		private void DrawPreviewCamera(int index, Camera camera, Camera previewCamera)
 		{
 			previewCamera.CopyFrom(camera);
 			previewCamera.cameraType = CameraType.Preview;
@@ -136,7 +141,7 @@ namespace UniLib
 			}
 
 			var size = GetCameraSize(camera);
-			var previewTexture = GetPreviewTextureWithSize((int) size.x, (int) size.y);
+			var previewTexture = GetPreviewTextureWithSize(index, (int) size.x, (int) size.y);
 			previewTexture.antiAliasing = Mathf.Max(1, QualitySettings.antiAliasing);
 			previewCamera.targetTexture = previewTexture;
 			previewCamera.pixelRect = new Rect(0, 0, size.x, size.y);
@@ -184,17 +189,28 @@ namespace UniLib
 			}
 		}
 
-		private RenderTexture GetPreviewTextureWithSize(int width, int height)
+		private RenderTexture GetPreviewTextureWithSize(int index, int width, int height)
 		{
-			if (_previewTexture == null || _previewTexture.width != width || _previewTexture.height != height)
-#if UNITY_2019_1_OR_NEWER
-				_previewTexture = new RenderTexture(width, height, 24, SystemInfo.GetGraphicsFormat(DefaultFormat.LDR));
-#else
-				_previewTexture = new RenderTexture(width, height, 24, RenderTextureFormat.Default, RenderTextureReadWrite.Linear);
-#endif
+			if (_previewTextures.Length <= index)
+			{
+				ArrayUtility.Add(ref _previewTextures, CreateRenderTexture(width, height));
+			}
+			else if (_previewTextures[index].width != width || _previewTextures[index].height != height)
+			{
+				Destroy(_previewTextures[index]);
+				_previewTextures[index] = CreateRenderTexture(width, height);
+			}
 
-			
-			return _previewTexture;
+			return _previewTextures[index];
+		}
+
+		private RenderTexture CreateRenderTexture(int width, int height)
+		{
+#if UNITY_2019_1_OR_NEWER
+			return new RenderTexture(width, height, 24, SystemInfo.GetGraphicsFormat(DefaultFormat.LDR));
+#else
+			return new RenderTexture(width, height, 24, RenderTextureFormat.Default, RenderTextureReadWrite.Linear);
+#endif
 		}
 
 		private Vector2 GetCameraSize(Camera camera)
