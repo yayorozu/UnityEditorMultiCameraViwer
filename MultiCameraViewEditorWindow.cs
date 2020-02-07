@@ -165,12 +165,12 @@ namespace UniLib
 			if (_positionSize < size.x)
 			{
 				EditorGUILayout.EndHorizontal();
-				_positionSize = position.width - size.x;
+				_positionSize = position.width - size.x - 30;
 				EditorGUILayout.BeginHorizontal();
 			}
 			else
 			{
-				_positionSize -= size.x + 20;
+				_positionSize -= size.x + 30;
 			}
 			using (new EditorGUILayout.VerticalScope("box", GUILayout.Width(size.x)))
 			{
