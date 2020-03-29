@@ -9,7 +9,7 @@ using UnityEngine.Experimental.Rendering;
 using UnityEngine.SceneManagement;
 #endif
 
-namespace UniLib
+namespace Yorozu
 {
 	public class MultiCameraViewEditorWindow : EditorWindow
 	{
